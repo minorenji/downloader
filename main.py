@@ -1,28 +1,34 @@
 from selenium import webdriver
-
-driver = webdriver.Chrome("chromedriver.exe")
-
-
-def nexus_login(browser: webdriver.Chrome):
-    browser.get("https://users.nexusmods.com/auth/sign_in")
-    assert "Users" in browser.title, "Unexpected webpage!"
-
-    username = browser.find_element_by_id("user_login")
-    username.send_keys("sean.treefrog@gmail.com")
-    password = browser.find_element_by_id("user_password")
-    password.send_keys(".2s4_4qXgWfK#?E")
-    browser.find_element_by_name("commit").click()
+from selenium.common import exceptions
 
 
-def nexus_download(browser: webdriver.Chrome, url: str):
-    browser.get(url)
-    try:
-        button = browser.find_element_by_id("//a[@class='btn inline-flex' and ./span/text()='Manual download']")
-    except:
-        raise
-    button.get_attribute("href")
+class Driver:
+    def __init__(self):
+        self.driver = webdriver.Chrome("chromedriver.exe")
+
+    def downloads_window(self):
+        if len(self.driver.window_handles) == 1:
+            self.driver.switch_to.new_window('window')
+
+    def nexus_login(self, url: str):
+        self.driver.get(url)
+        assert "Users" in self.driver.title, "Unexpected webpage!"
+        username = self.driver.find_element_by_id("user_login")
+        username.send_keys("sean.treefrog@gmail.com")
+        password = self.driver.find_element_by_id("user_password")
+        password.send_keys(".2s4_4qXgWfK#?E")
+        self.driver.find_element_by_name("commit").click()
+
+    def nexus_download(self, url: str):
+        self.driver.get(url)
+        try:
+            self.driver.find_element_by_id('slowDownloadButton').click()
+        except exceptions.NoSuchElementException:
+            login_link = self.driver.find_element_by_class_name("replaced-login-link").get_attribute("href")
+            self.nexus_login(login_link)
+            self.nexus_download(url)
 
 
 if __name__ == "__main__":
-    assert "None"
-    nexus_login(driver)
+    new_driver = Driver()
+    new_driver.nexus_download("https://www.nexusmods.com/skyrimspecialedition/mods/266?tab=files&file_id=121306")
