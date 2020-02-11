@@ -4,25 +4,33 @@ import requests
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.by import By
+import os
 import time
+
+
+download_path = "C:/Users/seant/PyCharmProjects/downloader/download/"
+if not os.path.exists(download_path):
+    os.mkdir(download_path)
 
 
 class Driver:
     def __init__(self):
         chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_experimental_option("detach", True)
+        prefs = {'download.default_directory': download_path}
+        chrome_options.add_experimental_option('prefs', prefs)
         self.driver = webdriver.Chrome("chromedriver.exe", options=chrome_options)
         self.driver.implicitly_wait(2)
-        self.disable_auto_downloads()
+        # self.disable_auto_downloads()
         self.main_window = self.driver.current_window_handle
         self.downloads_window()
 
     def downloads_window(self):
         self.driver.execute_script('''window.open("chrome://downloads/","_blank");''')
         # self.driver.get("chrome://downloads/")
-        download_window = self.driver.current_window_handle
+        # download_window = self.driver.current_window_handle
         self.driver.switch_to.window(self.main_window)
 
+    """
     def cancel_download(self):
         time.sleep(5)
         self.driver.switch_to.window(self.driver.window_handles[-1])
@@ -32,6 +40,7 @@ class Driver:
         shadow_root2 = self.expand_shadow_root(root2)
         shadow_root2.find_element_by_css_selector("cr-button[focus-type='cancel']").click()
         self.driver.switch_to.window(self.main_window)
+    """
 
     def nexus_login(self, url: str):
         self.driver.get(url)
@@ -44,6 +53,7 @@ class Driver:
         self.driver.switch_to.window(self.main_window)
         time.sleep(5)
 
+    """
     def disable_auto_downloads(self):
         self.driver.get("chrome://settings/content/automaticDownloads")
         root1 = self.driver.find_element_by_tag_name("settings-ui")
@@ -73,6 +83,7 @@ class Driver:
         root10 = shadow_root9.find_element_by_css_selector('settings-toggle-button')
         shadow_root10 = self.expand_shadow_root(root10)
         shadow_root10.find_element_by_css_selector('cr-toggle').click()
+    """
 
     def nexus_download(self, url: str, first=None):
         self.driver.get(url)
@@ -83,53 +94,69 @@ class Driver:
         button = WebDriverWait(self.driver, 10).until(ec.element_to_be_clickable((By.ID, "slowDownloadButton")))
         time.sleep(1)
         button.click()
+        """
         self.driver.implicitly_wait(10)
+        
         download_link = self.driver.find_element_by_class_name('donation-wrapper').find_element_by_tag_name('a'). \
             get_attribute('href')
         self.driver.implicitly_wait(1)
         print(download_link)
+        
 
         file_name = download_link.split('/')[-1].split('?')[0].replace('%20', ' ')
         try:
             self.cancel_download()
-        except exceptions.NoSuchElementException:
+        except exceptions.NoSuchElementException or exceptions.ElementNotInteractableException:
             self.driver.switch_to.window(self.main_window)
             return
         self.download_file(download_link, file_name)
+        """
 
-    def download_file(self, url: str, file_name: str):
+    @staticmethod
+    def download_file(url: str, file_name: str):
+        print("Downloading file")
+        global download_path
         with requests.get(url, stream=True) as r:
+            size = r.headers['Content-Length']
             r.raise_for_status()
             current_bytes = 0
-            file_path = "E:/STEP Mods/" + file_name
+            file_path = download_path + file_name
             with open(file_path, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
                     if chunk:  # filter out keep-alive new chunks
                         f.write(chunk)
                         current_bytes += 1024 * 1024
-                        print(str(current_bytes))
+                        print(str(current_bytes) + '/' + str(size))
                         # f.flush()
 
     def expand_shadow_root(self, element):
         shadow_root = self.driver.execute_script('return arguments[0].shadowRoot', element)
         return shadow_root
 
+    def find_shadow_dom(self, shadow_element_css, root_element):
+        shadow_root = self.expand_shadow_root(root_element)
+        try:
+            shadow_root.find_element_by_css_selector(shadow_element_css)
+        except exceptions.NoSuchElementException:
+            return self.find_shadow_dom(shadow_element_css, shadow_root)
+
 
 def download_list(path, driver: Driver):
     with open(path, 'r') as f:
         links = f.readlines()
-    links.reverse()
     first = True
-    for link in reversed(links):
+    for link in links:
         if "nexusmods" in link:
             driver.nexus_download(link, first=first)
             first = False
-            links.remove(link)
-            with open(path, 'w') as f:
-                f.writelines(links)
+        else:
+            file_name = link.split('/')[-1].split('?')[0].replace('%20', ' ')
+            driver.download_file(file_name, link)
+        with open(path, 'w') as f:
+            f.writelines(links[links.index(link) + 1:])
 
 
 if __name__ == "__main__":
     new_driver = Driver()
     download_list("download_list.txt", new_driver)
-    # new_driver.driver.quit()
+    new_driver.driver.quit()
